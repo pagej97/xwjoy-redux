@@ -1,0 +1,182 @@
+jmp +0xfc => 0x1ff # e9 fc 00
+
+# 4d 6f 76 65 20 64 69 61 6c 20 74 6f 20 64 6f 77 6e 20 70 6f 73 69 74 69 6f 6e 2c 20 61 6e 64 20 70 72 65 73 73 20 62 75 74 74 6f 6e 2e 24
+db "Move dial to down position, and press button.', '$'
+
+# 4d 6f 76 65 20 64 69 61 6c 20 74 6f 20 75 70 20 70 6f 73 69 74 69 6f 6e 2c 20 61 6e 64 20 70 72 65 73 73 20 62 75 74 74 6f 6e 2e 24
+db "Move dial to up position, and press button.", '$'
+
+# 0d 0a 24
+db '\r','\n','$'
+
+0160:
+db 00 00
+
+0162:
+db 00 00
+
+0164:
+db 00 00
+
+0166:
+db 00 00
+
+0168:
+db 00 00
+
+00 00 00 08 0e 5d
+1b 5b 1a 5c 2b 
+
+0175():
+push edx # 52
+mov dx, 0201 # ba 01 02
+xor cx, cx # 33 c9
+out dx, al # ee
+0175_loop:
+in al, dx # ec
+and al, 08 # 24 08
+or al, al # 0a c0
+jz 0175_ret # 74 02
+jmp 0175_loop # e2 f7
+0175_ret:
+neg cx # f7 d9
+pop dx # 5a
+ret # c3 
+
+0189():
+mov dx, 0201 # ba 01 02
+0189_loop:
+in al, dx # ec
+and al, 30 # 24 30
+cmp al, 30 # 3c 30
+jnz 0189_ret # 75 02
+jmp 0189_loop # eb f7
+0189_ret:
+ret # c3
+
+0196():
+mov dx, 0201 # ba 01 02
+0196_loop:
+in al, dx # ec
+and al, 30 # 24 30
+cmp al, 30 # 3c 30
+jz 0196_ret # 74 02
+jmp 0196_loop # eb f7
+ret # c3
+
+inthdlr():
+push ax # 50
+push bx # 53
+push cx # 51
+push dx # 52
+push di # 57
+pushf # 9c
+call 0175 # e8 c9 ff
+call 01de # e8 2f 00
+cmp al,[cs:0168] # 2e 3a 06 68 01
+jz inthdlr_exit 01d1 # 74 1b
+
+mov bl, al # 8a d8
+shl al, 1 # d0 e0
+xor ah, ah # 32 e4
+add ax, 016d # 05 6d 01
+mov di, ax # 8b f8
+mov cx, [cs:di] # 2e 8b 0d
+mov ah, 05 # b4 05
+int 16 # cd 16
+or al, al # 0a c0
+jnz inthdlr_exit # 75 05
+
+mov [cs:0168], bl # 2e 88 1e 68 01 
+
+inthdlr_exit:
+popf # 9d
+pop di # 5f
+pop dx # 5a
+pop cx # 59
+pop bx # 5b
+pop ax # 58
+
+inthdlr_callprev:
+pushf # 9c
+call far [cs:0169] # 2e ff 1e 69 01
+iret # cf 
+
+01de():
+call 0175 # e8 94 ff
+xor al, al # 32 c0
+cs # 2e
+cmp cx, [0162] # 3b 0e 62 01
+jl 01de_ret # 7c 14
+inc al # fe c0
+cs # 2e
+cmp cx, [0164] # 3b 0e 64 01
+jl 01de_ret # 7c 0b
+inc al # fe c0
+cs # 2e
+cmp cx, [0166] # 3b 0e 66 01
+jl 01de_ret # 7c 02
+inc al # fe c0 
+01de_ret:
+ret # c3 
+
+main:
+mov ah, 09 # b4 09 ; 09 = write string to stdout
+mov dx, 0103 # ba 03 01 ; dx = "Move dial to down..."
+int 21 # cd 21
+
+mov dx, 015d # ba 5d 01 ; 5d = "\r\n"
+int 21 # cd 21
+
+call 0189 # e8 7b ff
+call 0175 # e8 64 ff
+
+cs: # 2e
+mov [0160], cx # 89 0e 60 01
+
+mov dx, 0131 # ba 31 01 ; "Move dial to up..."
+int 21 # cd 21
+mov dx, 015d # ba 5d 01 ; 5d = "\r\n"
+int 21 # cd 21
+
+call 0196 # e8 73 ff
+call 0189 # e8 63 ff
+call 0175 # e8 4c ff
+
+cs: # 2e
+mov ax, [0160] # a1 60 01
+sub ax, cx # 2b c1
+shr ax, 1 # d1 e8
+shr ax, 1 # d1 e8
+add cx, ax # 03 c8
+cs # 2e
+mov [0162], cx # 89 0e 62 01
+add cx, ax # 03 c8
+cs # 2e
+mov [0164], cx # 89 0e 64 01
+add cx, ax # 03 c8
+cs # 2e
+mov [0166], cx # 89 0e 66 01
+call 01de # e8 93 ff
+
+mov [cs: 0168], al # 2e a2 68 01
+
+mov ax, 3508 # b8 08 35 ; 35 = get interrupt vector, vector = 08
+int 21 # cd 21 ; ES:BX -> current interrupt handler
+mov [cs:0169], bx # 2e 89 1e 69 01
+mov [cs:016b], es # 2e 8c 06 6b 01
+
+mov dx, inthdlr # ba a3 01 ; 01a3 = interrupt handler
+mov ax, 2508 # b8 08 25 ; 25 = set interrupt vector, vector = 08
+int 21 # cd 21 DS:DX -> new interrupt handler
+
+mov ax, [002c] # a1 2c 00
+mov es, ax # 8e c0
+mov ah, 49 # b4 49
+int 21 # cd 21
+
+mov dx, 0030 # ba 30 00
+mov ax, 3100 # b8 00 31
+int 21 # cd 21
+
+
