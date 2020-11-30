@@ -1,0 +1,218 @@
+C:\joydebug>debug joy.com
+-u
+11B1:0100 E9FC00        JMP     01FF
+11B1:0103 4D            DEC     BP
+11B1:0104 6F            DB      6F
+11B1:0105 7665          JBE     016C
+11B1:0107 206469        AND     [SI+69],AH
+11B1:010A 61            DB      61
+11B1:010B 6C            DB      6C
+11B1:010C 20746F        AND     [SI+6F],DH
+11B1:010F 20646F        AND     [SI+6F],AH
+11B1:0112 776E          JA      0182
+11B1:0114 20706F        AND     [BX+SI+6F],DH
+11B1:0117 7369          JNB     0182
+11B1:0119 7469          JZ      0184
+11B1:011B 6F            DB      6F
+11B1:011C 6E            DB      6E
+11B1:011D 2C20          SUB     AL,20
+11B1:011F 61            DB      61
+-
+11B1:0120 6E            DB      6E
+11B1:0121 64            DB      64
+11B1:0122 207072        AND     [BX+SI+72],DH
+11B1:0125 65            DB      65
+11B1:0126 7373          JNB     019B
+11B1:0128 206275        AND     [BP+SI+75],AH
+11B1:012B 7474          JZ      01A1
+11B1:012D 6F            DB      6F
+11B1:012E 6E            DB      6E
+11B1:012F 2E            CS:
+11B1:0130 244D          AND     AL,4D
+11B1:0132 6F            DB      6F
+11B1:0133 7665          JBE     019A
+11B1:0135 206469        AND     [SI+69],AH
+11B1:0138 61            DB      61
+11B1:0139 6C            DB      6C
+11B1:013A 20746F        AND     [SI+6F],DH
+11B1:013D 207570        AND     [DI+70],DH
+-
+-u
+11B1:0140 20706F        AND     [BX+SI+6F],DH
+11B1:0143 7369          JNB     01AE
+11B1:0145 7469          JZ      01B0
+11B1:0147 6F            DB      6F
+11B1:0148 6E            DB      6E
+11B1:0149 2C20          SUB     AL,20
+11B1:014B 61            DB      61
+11B1:014C 6E            DB      6E
+11B1:014D 64            DB      64
+11B1:014E 207072        AND     [BX+SI+72],DH
+11B1:0151 65            DB      65
+11B1:0152 7373          JNB     01C7
+11B1:0154 206275        AND     [BP+SI+75],AH
+11B1:0157 7474          JZ      01CD
+11B1:0159 6F            DB      6F
+11B1:015A 6E            DB      6E
+11B1:015B 2E            CS:
+11B1:015C 240D          AND     AL,0D
+11B1:015E 0A24          OR      AH,[SI]
+-
+-u
+11B1:0160 0000          ADD     [BX+SI],AL
+11B1:0162 0000          ADD     [BX+SI],AL
+11B1:0164 0000          ADD     [BX+SI],AL
+11B1:0166 0000          ADD     [BX+SI],AL
+11B1:0168 0000          ADD     [BX+SI],AL
+11B1:016A 0000          ADD     [BX+SI],AL
+11B1:016C 0008          ADD     [BX+SI],CL
+11B1:016E 0E            PUSH    CS
+11B1:016F 5D            POP     BP
+11B1:0170 1B5B1A        SBB     BX,[BP+DI+1A]
+11B1:0173 5C            POP     SP
+11B1:0174 2B52BA        SUB     DX,[BP+SI-46]
+11B1:0177 0102          ADD     [BP+SI],AX
+11B1:0179 33C9          XOR     CX,CX
+11B1:017B EE            OUT     DX,AL
+11B1:017C EC            IN      AL,DX
+11B1:017D 2408          AND     AL,08
+11B1:017F 0AC0          OR      AL,AL
+-u
+11B1:0181 7402          JZ      0185
+11B1:0183 E2F7          LOOP    017C
+11B1:0185 F7D9          NEG     CX
+11B1:0187 5A            POP     DX
+11B1:0188 C3            RET
+11B1:0189 BA0102        MOV     DX,0201
+11B1:018C EC            IN      AL,DX
+11B1:018D 2430          AND     AL,30
+11B1:018F 3C30          CMP     AL,30
+11B1:0191 7502          JNZ     0195
+11B1:0193 EBF7          JMP     018C
+11B1:0195 C3            RET
+11B1:0196 BA0102        MOV     DX,0201
+11B1:0199 EC            IN      AL,DX
+11B1:019A 2430          AND     AL,30
+11B1:019C 3C30          CMP     AL,30
+11B1:019E 7402          JZ      01A2
+11B1:01A0 EBF7          JMP     0199
+-
+11B1:01A2 C3            RET
+11B1:01A3 50            PUSH    AX
+11B1:01A4 53            PUSH    BX
+11B1:01A5 51            PUSH    CX
+11B1:01A6 52            PUSH    DX
+11B1:01A7 57            PUSH    DI
+11B1:01A8 9C            PUSHF
+11B1:01A9 E8C9FF        CALL    0175
+11B1:01AC E82F00        CALL    01DE
+11B1:01AF 2E            CS:
+11B1:01B0 3A066801      CMP     AL,[0168]
+11B1:01B4 741B          JZ      01D1
+11B1:01B6 8AD8          MOV     BL,AL
+11B1:01B8 D0E0          SHL     AL,1
+11B1:01BA 32E4          XOR     AH,AH
+11B1:01BC 056D01        ADD     AX,016D
+11B1:01BF 8BF8          MOV     DI,AX
+11B1:01C1 2E            CS:
+11B1:01C2 8B0D          MOV     CX,[DI]
+-
+-u
+11B1:01C4 B405          MOV     AH,05
+11B1:01C6 CD16          INT     16
+11B1:01C8 0AC0          OR      AL,AL
+11B1:01CA 7505          JNZ     01D1
+11B1:01CC 2E            CS:
+11B1:01CD 881E6801      MOV     [0168],BL
+11B1:01D1 9D            POPF
+11B1:01D2 5F            POP     DI
+11B1:01D3 5A            POP     DX
+11B1:01D4 59            POP     CX
+11B1:01D5 5B            POP     BX
+11B1:01D6 58            POP     AX
+11B1:01D7 9C            PUSHF
+11B1:01D8 2E            CS:
+11B1:01D9 FF1E6901      CALL    FAR [0169]
+11B1:01DD CF            IRET
+11B1:01DE E894FF        CALL    0175
+11B1:01E1 32C0          XOR     AL,AL
+11B1:01E3 2E            CS:
+11B1:01E4 3B0E6201      CMP     CX,[0162]
+-
+-u
+11B1:01E8 7C14          JL      01FE
+11B1:01EA FEC0          INC     AL
+11B1:01EC 2E            CS:
+11B1:01ED 3B0E6401      CMP     CX,[0164]
+11B1:01F1 7C0B          JL      01FE
+11B1:01F3 FEC0          INC     AL
+11B1:01F5 2E            CS:
+11B1:01F6 3B0E6601      CMP     CX,[0166]
+11B1:01FA 7C02          JL      01FE
+11B1:01FC FEC0          INC     AL
+11B1:01FE C3            RET
+11B1:01FF B409          MOV     AH,09
+11B1:0201 BA0301        MOV     DX,0103
+11B1:0204 CD21          INT     21
+11B1:0206 BA5D01        MOV     DX,015D
+-
+-u
+11B1:0209 CD21          INT     21
+11B1:020B E87BFF        CALL    0189
+11B1:020E E864FF        CALL    0175
+11B1:0211 2E            CS:
+11B1:0212 890E6001      MOV     [0160],CX
+11B1:0216 BA3101        MOV     DX,0131
+11B1:0219 CD21          INT     21
+11B1:021B BA5D01        MOV     DX,015D
+11B1:021E CD21          INT     21
+11B1:0220 E873FF        CALL    0196
+11B1:0223 E863FF        CALL    0189
+11B1:0226 E84CFF        CALL    0175
+-
+11B1:0229 2E            CS:
+11B1:022A A16001        MOV     AX,[0160]
+11B1:022D 2BC1          SUB     AX,CX
+11B1:022F D1E8          SHR     AX,1
+11B1:0231 D1E8          SHR     AX,1
+11B1:0233 03C8          ADD     CX,AX
+11B1:0235 2E            CS:
+11B1:0236 890E6201      MOV     [0162],CX
+11B1:023A 03C8          ADD     CX,AX
+11B1:023C 2E            CS:
+11B1:023D 890E6401      MOV     [0164],CX
+11B1:0241 03C8          ADD     CX,AX
+11B1:0243 2E            CS:
+11B1:0244 890E6601      MOV     [0166],CX
+11B1:0248 E893FF        CALL    01DE
+-
+-u
+11B1:024B 2E            CS:
+11B1:024C A26801        MOV     [0168],AL
+11B1:024F B80835        MOV     AX,3508
+11B1:0252 CD21          INT     21
+11B1:0254 2E            CS:
+11B1:0255 891E6901      MOV     [0169],BX
+11B1:0259 2E            CS:
+11B1:025A 8C066B01      MOV     [016B],ES
+11B1:025E BAA301        MOV     DX,01A3
+11B1:0261 B80825        MOV     AX,2508
+11B1:0264 CD21          INT     21
+11B1:0266 A12C00        MOV     AX,[002C]
+11B1:0269 8EC0          MOV     ES,AX
+-
+-u
+11B1:026B B449          MOV     AH,49
+11B1:026D CD21          INT     21
+11B1:026F BA3000        MOV     DX,0030
+11B1:0272 B80031        MOV     AX,3100
+11B1:0275 CD21          INT     21
+======================================================
+11B1:0277 21D9          AND     CX,BX
+11B1:0279 3C01          CMP     AL,01
+11B1:027B 7520          JNZ     029D
+11B1:027D A024D3        MOV     AL,[D324]
+11B1:0280 0441          ADD     AL,41
+11B1:0282 B43A          MOV     AH,3A
+11B1:0284 C6460102      MOV     BYTE PTR [BP+01],02
+11B1:0288 BF26D9        MOV     DI,D926
