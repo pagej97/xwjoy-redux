@@ -17,6 +17,8 @@ DOS_TSR       EQU 031h
 DOS_ALLOCMEM  EQU 048h
 DOS_FREEMEM   EQU 049h
 
+KEYBD_WRITE   EQU 05h
+
 
     jmp Install ; Jump over data and resident code
 
@@ -26,59 +28,61 @@ Down_msg BYTE 'Move dial to down position, and press button.$'
 Up_msg BYTE 'Move dial to up position, and press button.$'
 Crlf_msg BYTE 0dh,0ah,'$'
 
-Range_Bottom WORD ?
-Range_25 WORD ?
-Range_50 WORD ?
-Range_75 WORD ?
+Range_0   WORD ?
+Range_33  WORD ?
+Range_66  WORD ?
+Range_100 WORD ?
 
-ISRInstalled BYTE 00h
+LastPosition BYTE 00h
 
 OldISR WORD 0000h
 OldISRSeg WORD 0000h
-Var_Mystery BYTE 08h,0eh,05dh,01bh,05bh,01ah,05ch,02bh
+KeyDataTable:
+KeyData_0   BYTE 08h,0eh
+KeyData_33  BYTE 5dh,1bh
+KeyData_66  BYTE 5bh,1ah
+KeyData_100 BYTE 5ch,2bh
 
 
-Proc0175 PROC
-    push dx
+JoystickReadPosition PROC USES dx
     mov dx, PORT_JOYSTICK
     xor cx, cx
     out dx, al ; start read
-Proc0175_loop:
+JoystickReadPosition_loop:
     in al, dx
     and al, 08h
-    or al, al
-    jz Proc0175_ret
-    loop Proc0175_loop
-Proc0175_ret:
+    .IF al
+        loop JoystickReadPosition_loop
+    .ENDIF
     neg cx
-    pop dx
     ret
-Proc0175 ENDP
+JoystickReadPosition ENDP
 
 
-Proc0189 PROC
+JoystickWaitButton PROC
     mov dx, PORT_JOYSTICK
-Proc0189_loop:
+JoystickWaitButton_loop:
     in al, dx
     and al, 30h
     cmp al, 30h
-    jnz Proc0189_ret
-    jmp Proc0189_loop
-Proc0189_ret:
+    .IF zero?
+        jmp JoystickWaitButton_loop
+    .ENDIF
     ret
-Proc0189 ENDP
+JoystickWaitButton ENDP
 
-Proc0196 PROC
+
+JoystickWaitNotButton PROC
     mov dx, PORT_JOYSTICK
-Proc0196_loop:
+JoystickWaitNotButton_loop:
     in al, dx
     and al, 30h
     cmp al, 30h
-    jz Proc0196_ret
-    jmp Proc0196_loop
-Proc0196_ret:
+    .IF !zero?
+        jmp JoystickWaitNotButton_loop
+    .ENDIF
     ret
-Proc0196 ENDP
+JoystickWaitNotButton ENDP
 
 
 IntHdlr PROC FAR
@@ -88,25 +92,26 @@ IntHdlr PROC FAR
     push dx
     push di
     pushf
-    call Proc0175
-    call Proc01de
-    cmp al,cs:[ISRInstalled]
-    jz IntHdlr_exit
+    call JoystickReadPosition
+    call ReadBand
 
-    mov bl, al
-    shl al, 1
-    xor ah, ah
-    add ax, offset Var_Mystery
-    mov di, ax
-    mov cx, cs:[di]
-    mov ah, 05h
-    int 16h
-    or al, al
-    jnz IntHdlr_exit
+    cmp al,cs:[LastPosition]
+    .IF !zero?
+        mov bl, al
+        shl al, 1
+        xor ah, ah
+        add ax, offset KeyDataTable
+        mov di, ax
+        mov cx, cs:[di]
+        mov ah, KEYBD_WRITE
+        int 16h
 
-    mov cs:[ISRInstalled], bl
+        or al, al
+        .IF zero?
+            mov cs:[LastPosition], bl
+        .ENDIF
+    .ENDIF
 
-IntHdlr_exit:
     popf
     pop di
     pop dx
@@ -114,7 +119,7 @@ IntHdlr_exit:
     pop bx
     pop ax
 
-IntHdlr__callprev:
+IntHdlr_callprev:
     pushf
 
     ;call far ptr cs:OldISR
@@ -125,25 +130,25 @@ IntHdlr__callprev:
 IntHdlr ENDP
 
 
-Proc01de PROC
-    call Proc0175
+ReadBand PROC
+    call JoystickReadPosition
     xor al, al
 
-    cmp cx, cs:[Range_25]
-    jl Proc01de_ret
+    cmp cx, cs:[Range_33]
+    jl ReadBand_ret
     inc al
 
-    cmp cx, cs:[Range_50]
-    jl Proc01de_ret
+    cmp cx, cs:[Range_66]
+    jl ReadBand_ret
     inc al
 
-    cmp cx, cs:[Range_75]
-    jl Proc01de_ret
+    cmp cx, cs:[Range_100]
+    jl ReadBand_ret
     inc al
 
-Proc01de_ret:
+ReadBand_ret:
     ret
-Proc01de ENDP
+ReadBand ENDP
 
 ;* Install
 ;* This procedure marks the end of the TSR's resident section and the
@@ -154,39 +159,39 @@ Proc01de ENDP
 
 Install PROC
     mov ah, DOS_PRINTSTR
-    mov dx, 0103h ; dx = "Move dial to down..."
+    mov dx, offset Down_msg
     int 21h
-    mov dx, 015dh ; 5d = "\r\n"
-    int 21h
-
-    call Proc0189
-    call Proc0175
-
-    mov cs:[Range_Bottom], cx
-
-    mov dx, 0131h ; "Move dial to up..."
-    int 21h
-    mov dx, 015dh ; 5d = "\r\n"
+    mov dx, offset Crlf_msg
     int 21h
 
-    call Proc0196
+    call JoystickWaitButton
+    call JoystickReadPosition
 
-    call Proc0189
-    call Proc0175
+    mov cs:[Range_0], cx
 
-    mov ax, cs:[Range_Bottom]
+    mov dx, offset Up_msg
+    int 21h
+    mov dx, offset Crlf_msg
+    int 21h
+
+    call JoystickWaitNotButton
+
+    call JoystickWaitButton
+    call JoystickReadPosition
+
+    mov ax, cs:[Range_0]
     sub ax, cx
     shr ax, 1 ; divide difference between top and bottom by four
     shr ax, 1
     add cx, ax
-    mov cs:[Range_25], cx
+    mov cs:[Range_33], cx
     add cx, ax
-    mov cs:[Range_50], cx
+    mov cs:[Range_66], cx
     add cx, ax
-    mov cs:[Range_75], cx
-    call Proc01de
+    mov cs:[Range_100], cx
+    call ReadBand
 
-    mov cs:[ISRInstalled], al
+    mov cs:[LastPosition], al
 
     ; save old interrupt vector
     mov ax, 3508h ; 35 = get interrupt vector, vector = 08
@@ -205,7 +210,8 @@ FreeAddr EQU 002ch
     mov ah, DOS_FREEMEM
     int 21h
 
-    mov dx, 30h ; 30 paragraphs long (0x300h bytes?)
+ResidentLen EQU 30h ; 30 paragraphs long (0x300h bytes?)
+    mov dx, ResidentLen
     mov ax, 3100h
     int 21h
 Install ENDP
