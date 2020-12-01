@@ -33,15 +33,19 @@ Range_33  WORD ?
 Range_66  WORD ?
 Range_100 WORD ?
 
-LastPosition BYTE 00h
+;LastPosition  WORD ?
+LastRange     BYTE ?
+;LastPosOffset WORD ?
 
 OldISR WORD 0000h
 OldISRSeg WORD 0000h
 KeyDataTable:
-KeyData_0   BYTE 08h,0eh
-KeyData_33  BYTE 5dh,1bh
-KeyData_66  BYTE 5bh,1ah
-KeyData_100 BYTE 5ch,2bh
+KeyData_0     BYTE 08h,0eh ; backspace
+KeyData_33    BYTE 5dh,1bh ; ']'
+KeyData_66    BYTE 5bh,1ah ; '['
+KeyData_100   BYTE 5ch,2bh ; '\'
+;KeyData_Plus  BYTE 3dh,0dh ; '+'
+;KeyData_Minus BYTE 2dh,0ch ; '-'
 
 
 JoystickReadPosition PROC USES dx
@@ -92,23 +96,23 @@ IntHdlr PROC FAR
     push dx
     push di
     pushf
-    call JoystickReadPosition
+    ; original did a seemingly-useless "call JoystickReadPosition", here, as ReadBand() does one for us
     call ReadBand
 
-    cmp al,cs:[LastPosition]
-    .IF !zero?
-        mov bl, al
-        shl al, 1
+    .IF al != cs:[LastRange]
+        mov bl, al ; save range before converting to keycodes
+
+        shl al, 1 ; di = KeyDataTable[range * 2]
         xor ah, ah
         add ax, offset KeyDataTable
         mov di, ax
+
         mov cx, cs:[di]
         mov ah, KEYBD_WRITE
         int 16h
 
-        or al, al
-        .IF zero?
-            mov cs:[LastPosition], bl
+        .IF !al ; if successfully wrote to keyboard
+            mov cs:[LastRange], bl
         .ENDIF
     .ENDIF
 
@@ -130,6 +134,9 @@ IntHdlr_callprev:
 IntHdlr ENDP
 
 
+;;;;;;;;;;;;;;;;;;;;
+; ReadBand() returns band in al, and total offset in cx
+;;;;;;;;;;;;;;;;;;;;
 ReadBand PROC
     call JoystickReadPosition
     xor al, al
@@ -149,6 +156,7 @@ ReadBand PROC
 ReadBand_ret:
     ret
 ReadBand ENDP
+
 
 ;* Install
 ;* This procedure marks the end of the TSR's resident section and the
@@ -191,10 +199,11 @@ Install PROC
     mov cs:[Range_100], cx
     call ReadBand
 
-    mov cs:[LastPosition], al
+    ;mov cs:[LastPosition], cx
+    mov cs:[LastRange], al
 
     ; save old interrupt vector
-    mov ax, 3508h ; 35 = get interrupt vector, vector = 08
+    mov ax, 3508h ; 35 = get interrupt vector, vector = 08 (clock)
     int 21h ; ES:BX -> current interrupt handler
     mov cs:[OldISR], bx
     mov cs:[OldISRSeg], es
