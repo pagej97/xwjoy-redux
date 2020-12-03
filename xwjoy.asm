@@ -29,9 +29,9 @@ Up_msg BYTE 'Move dial to up position, and press button.$'
 Crlf_msg BYTE 0dh,0ah,'$'
 
 Range_0   WORD ?
-Range_33  WORD ?
-Range_66  WORD ?
-Range_100 WORD ?
+Range_75  WORD ?
+Range_50  WORD ?
+Range_25 WORD ?
 
 ;LastPosition  WORD ?
 LastRange     BYTE ?
@@ -40,10 +40,10 @@ LastRange     BYTE ?
 OldISR WORD 0000h
 OldISRSeg WORD 0000h
 KeyDataTable:
-KeyData_0     BYTE 08h,0eh ; backspace
-KeyData_33    BYTE 5dh,1bh ; ']'
-KeyData_66    BYTE 5bh,1ah ; '['
-KeyData_100   BYTE 5ch,2bh ; '\'
+KeyData_100   BYTE 08h,0eh ; backspace (100%)
+KeyData_66    BYTE 5dh,1bh ; ']' (66%)
+KeyData_33    BYTE 5bh,1ah ; '[' (33%)
+KeyData_0     BYTE 5ch,2bh ; '\' (0%)
 ;KeyData_Plus  BYTE 3dh,0dh ; '+'
 ;KeyData_Minus BYTE 2dh,0ch ; '-'
 
@@ -52,11 +52,11 @@ JoystickReadPosition PROC USES dx
     mov dx, PORT_JOYSTICK
     xor cx, cx
     out dx, al ; start read
-JoystickReadPosition_loop:
+ReadJS:
     in al, dx
     and al, 08h
     .IF al
-        loop JoystickReadPosition_loop
+        loop ReadJS
     .ENDIF
     neg cx
     ret
@@ -141,15 +141,15 @@ ReadBand PROC
     call JoystickReadPosition
     xor al, al
 
-    cmp cx, cs:[Range_33]
+    cmp cx, cs:[Range_75]
     jl ReadBand_ret
     inc al
 
-    cmp cx, cs:[Range_66]
+    cmp cx, cs:[Range_50]
     jl ReadBand_ret
     inc al
 
-    cmp cx, cs:[Range_100]
+    cmp cx, cs:[Range_25]
     jl ReadBand_ret
     inc al
 
@@ -192,11 +192,11 @@ Install PROC
     shr ax, 1 ; divide difference between top and bottom by four
     shr ax, 1
     add cx, ax
-    mov cs:[Range_33], cx
+    mov cs:[Range_75], cx
     add cx, ax
-    mov cs:[Range_66], cx
+    mov cs:[Range_50], cx
     add cx, ax
-    mov cs:[Range_100], cx
+    mov cs:[Range_25], cx
     call ReadBand
 
     ;mov cs:[LastPosition], cx
