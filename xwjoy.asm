@@ -11,7 +11,10 @@
 .STARTUP
 
 PORT_JOYSTICK EQU 0201h
+JOY_BUTTON_1  EQU 20h
+JOY_BUTTON_2  EQU 10h
 
+DOS_PRINTCHR  EQU 02h
 DOS_PRINTSTR  EQU 09h
 DOS_TSR       EQU 031h
 DOS_ALLOCMEM  EQU 048h
@@ -19,6 +22,7 @@ DOS_FREEMEM   EQU 049h
 
 KEYBD_WRITE   EQU 05h
 
+DEBUGMODE EQU 0
 
     jmp Install ; Jump over data and resident code
 
@@ -28,27 +32,37 @@ Down_msg BYTE 'Move dial to down position, and press button.$'
 Up_msg BYTE 'Move dial to up position, and press button.$'
 Crlf_msg BYTE 0dh,0ah,'$'
 
+KeyDataTable:
+KeyData_0     BYTE 5ch,2bh ; '\' (0%)
+KeyData_33    BYTE 5bh,1ah ; '[' (33%)
+KeyData_66    BYTE 5dh,1bh ; ']' (66%)
+KeyData_100   BYTE 08h,0eh ; backspace (100%)
+KeyData_Plus  BYTE 3dh,0dh ; '+'
+KeyData_Minus BYTE 2dh,0ch ; '-'
+
+
+BANDS equ 3
+FINE_BANDS_PER_BAND equ 10
+
+; calibration info:
 Range_0   WORD ?
-Range_75  WORD ?
-Range_50  WORD ?
-Range_25 WORD ?
+Range_100 WORD ?
+Range_Inverted BYTE 0
+BandWidthCoarse WORD ?
+BandWidthFine WORD ?
 
-;LastPosition  WORD ?
-LastRange     BYTE ?
-;LastPosOffset WORD ?
+; state:
+LastRangeAbsolute BYTE ?
+LastRangeRelative BYTE ?
+LastOffset WORD ?
+LastRising BYTE 1 ; 1 if rising, -1 if falling
 
+; install:
 OldISR WORD 0000h
 OldISRSeg WORD 0000h
-KeyDataTable:
-KeyData_100   BYTE 08h,0eh ; backspace (100%)
-KeyData_66    BYTE 5dh,1bh ; ']' (66%)
-KeyData_33    BYTE 5bh,1ah ; '[' (33%)
-KeyData_0     BYTE 5ch,2bh ; '\' (0%)
-;KeyData_Plus  BYTE 3dh,0dh ; '+'
-;KeyData_Minus BYTE 2dh,0ch ; '-'
 
 
-JoystickReadPosition PROC USES dx
+JoystickReadPosition PROC USES dx ; returns position in cx
     mov dx, PORT_JOYSTICK
     xor cx, cx
     out dx, al ; start read
@@ -63,12 +77,12 @@ ReadJS:
 JoystickReadPosition ENDP
 
 
-JoystickWaitButton PROC
+JoystickWaitButton PROC ; returns the button (s) pressed in al
     mov dx, PORT_JOYSTICK
 JoystickWaitButton_loop:
     in al, dx
-    and al, 30h
-    cmp al, 30h
+    and al, JOY_BUTTON_1 OR JOY_BUTTON_2
+    cmp al, JOY_BUTTON_1 OR JOY_BUTTON_2
     .IF zero?
         jmp JoystickWaitButton_loop
     .ENDIF
@@ -80,8 +94,8 @@ JoystickWaitNotButton PROC
     mov dx, PORT_JOYSTICK
 JoystickWaitNotButton_loop:
     in al, dx
-    and al, 30h
-    cmp al, 30h
+    and al, JOY_BUTTON_1 OR JOY_BUTTON_2
+    cmp al, JOY_BUTTON_1 OR JOY_BUTTON_2
     .IF !zero?
         jmp JoystickWaitNotButton_loop
     .ENDIF
@@ -89,39 +103,85 @@ JoystickWaitNotButton_loop:
 JoystickWaitNotButton ENDP
 
 
-IntHdlr PROC FAR
-    push ax
-    push bx
-    push cx
-    push dx
-    push di
-    pushf
-    ; original did a seemingly-useless "call JoystickReadPosition", here, as ReadBand() does one for us
-    call ReadBand
+HandlePosition MACRO SendKey ; expects absolute band in ah, relative band in al, and fine-band offset within greater band in cx, possibly negative
+    LOCAL CheckOffset, Decr, Incr, OffsetKey, SkipRest
 
-    .IF al != cs:[LastRange]
-        mov bl, al ; save range before converting to keycodes
+    ; write new range (if needed)
+    .IF al != cs:[LastRangeRelative]
+        mov bx, ax ; save range before converting to keycodes
 
         shl al, 1 ; di = KeyDataTable[range * 2]
         xor ah, ah
         add ax, offset KeyDataTable
         mov di, ax
 
-        mov cx, cs:[di]
-        mov ah, KEYBD_WRITE
-        int 16h
+        IF SendKey
+            push cx
+            mov cx, cs:[di]
+            mov ah, KEYBD_WRITE
+            int 16h
+            pop cx
+            .IF al ; if failed to write to keyboard
+                jmp SkipRest
+            .ENDIF
+        ENDIF
 
-        .IF !al ; if successfully wrote to keyboard
-            mov cs:[LastRange], bl
-        .ENDIF
+        mov cs:[LastRangeAbsolute], bh
+        mov cs:[LastRangeRelative], bl ; we're now in this new range
+        xor ax, ax ; at offset zero ; at offset zero
+        mov cs:[LastOffset], ax
     .ENDIF
 
-    popf
-    pop di
-    pop dx
-    pop cx
-    pop bx
-    pop ax
+    ; write new offsets (while needed)
+    mov ah, KEYBD_WRITE
+
+CheckOffset:
+    cmp cx, cs:[LastOffset]
+    je SkipRest
+    push cx ; save offset
+    jg Incr
+
+Decr:
+    ; else less-than
+    mov cx, offset KeyData_Minus
+    xor bx, bx
+    dec bx ; bl = -1
+    jmp OffsetKey
+
+Incr:
+    mov cx, offset KeyData_Plus
+    ; greater-than
+    xor bx, bx
+    inc bl ; bl = 1
+
+OffsetKey:
+    mov di, cx
+    mov cx, cs:[di]
+    IF SendKey
+        int 16h
+    ENDIF
+    pop cx ; restore offset
+    IF SendKey
+        .IF al ; if failed to write to keyboard
+            jmp SkipRest
+        .ENDIF
+    ENDIF
+    add cs:[LastOffset], bx ; success!
+    jmp CheckOffset
+
+SkipRest:
+ENDM
+
+
+
+IntHdlr PROC FAR
+    pusha
+;    call JoystickReadPosition
+    call JoystickReadPosition
+    call ConvertPosition
+
+    HandlePosition 1
+    popa
 
 IntHdlr_callprev:
     pushf
@@ -135,27 +195,108 @@ IntHdlr ENDP
 
 
 ;;;;;;;;;;;;;;;;;;;;
-; ReadBand() returns band in al, and total offset in cx
+; ConvertPosition(cx position) returns absolute band in ah, relative band in al, and fine-band offset within greater band in cx, possibly negative
 ;;;;;;;;;;;;;;;;;;;;
-ReadBand PROC
-    call JoystickReadPosition
-    xor al, al
+ConvertPosition PROC
+    ; get the range
+    mov ax, cs:[Range_100]
+    mov bx, cs:[Range_0]
 
-    cmp cx, cs:[Range_75]
-    jl ReadBand_ret
-    inc al
+    ; possible early return, before MustCompute
+    .IF cs:[BandWidthCoarse] == 0
+        xor al, al
+    .ELSEIF cs:[Range_Inverted]
+        .IF cx <= bx ; read a value beyond 100%
+            mov al, BANDS ; top band
+            mov dx, cs:[Range_100]
+            sub dx, cs:[Range_0]
+        .ELSEIF cx >= ax ; read a value beyond 0%
+            xor al, al
+            xor dx, dx
+            mov cs:[LastRising], 01h ; nowhere to go but up
+        .ELSE
+            ; gotta subtract reading from range top
+            mov dx, cx ; save reading in dx, then reading = top - reading
+            mov cx, ax ; ax == cs:[Range_100]
+            sub cx, dx
+            jmp MustCompute
+        .ENDIF
+    .ELSE
+        .IF cx >= ax ; read a value beyond 100%
+            mov al, BANDS ; top band
+            mov dx, cs:[Range_100]
+            sub dx, cs:[Range_0]
+        .ELSEIF cx <= bx ; read a value beyond 0%
+            xor al, al
+            xor dx, dx
+            mov cs:[LastRising], 01h ; nowhere to go but up
+        .ELSE
+            sub cx, bx ; normalized_position = position - range_bottom
+            jmp MustCompute
+        .ENDIF
+    .ENDIF
 
-    cmp cx, cs:[Range_50]
-    jl ReadBand_ret
-    inc al
-
-    cmp cx, cs:[Range_25]
-    jl ReadBand_ret
-    inc al
-
-ReadBand_ret:
+    mov ah, al ; absolute band = relative band
+    xor cx, cx ; no offset
     ret
-ReadBand ENDP
+
+MustCompute:
+    push bp
+    mov bp, sp
+    sub sp, 8
+
+    ; 6 bytes before sp will be stack area for new band, relative band, offset
+
+    mov [bp - 8], cx
+
+    mov ax, cx ; load dividend
+    xor dx, dx
+    mov bx, cs:[BandWidthCoarse] ; divisor
+    div bx ; ax is quotient, which is band
+    ; dx is remainder
+
+    mov [bp - 6], ax ; save band
+
+
+;    .IF cs:[LastRangeAbsolute] > al || cs:[LastRangeAbsolute] == al && cs:[LastOffset] < 0
+;        inc ax ; moving to lower band || staying at same band, and offset negative, falling = true, inc band
+;        sub dx, cs:[BandWidthCoarse] ; and reduce the remainder by that amount, so we go negative with offset
+;    .ENDIF
+    xor cl, cl
+    inc cl ; positive offsets, unless we determine otherwise
+
+    cmp cs:[LastRangeAbsolute], al
+    jl RelativeComputed ; moving to a higher band; will use positive offsets
+    jg NegOffsets; moving to a lower band; will use negative offsets
+    xor bx, bx ; can be bl, now
+    cmp cs:[LastRising], bl
+;    cmp cs:[LastOffset], bx
+    jge RelativeComputed  ; if same band, but last offset < 0, use negative offsets
+NegOffsets:
+    inc ax ; moving to lower band || staying at same band, and offset negative, falling = true, inc band
+    sub dx, cs:[BandWidthCoarse] ; and reduce the remainder by that amount, so we go negative with offset
+    neg cl
+RelativeComputed:
+    mov cs:[LastRising], cl
+    mov [bp - 4], ax ; save relative band
+
+    mov ax, dx ; load remainder as dividend
+    cwd
+    mov bx, cs:[BandWidthFine]
+    idiv bx ; ax is offset band
+
+    mov [bp - 2], ax ; save offset
+
+    mov ah, [bp - 6] ; absolute band
+    mov al, [bp - 4] ; relative band
+    mov cx, [bp - 2] ; offset
+    mov dx, [bp - 8] ; normalized offset
+
+    mov sp, bp
+    pop bp
+ConvertPosition_ret:
+    ret
+ConvertPosition ENDP
 
 
 ;* Install
@@ -163,6 +304,153 @@ ReadBand ENDP
 ;* beginning of the installation section.  When xwjoy terminates through
 ;* function 31h, the above code and data remain resident in memory.  The
 ;* memory occupied by the following code is returned to DOS.
+
+IF DEBUGMODE
+
+MsgUpper db "Upper: ", '$'
+MsgLower db "Lower: ", '$'
+MsgRange db "Range: ", '$'
+MsgBandWidthCoarse db "Coarse Band: ", '$'
+MsgBandWidthFine db "Fine Band: ", '$'
+Inverted_msg db "(Inverted)", 0dh, 0ah, '$'
+MsgColon db ": ", '$'
+
+
+PrintUnsignedCX PROC USES ax bx cx dx
+    mov ah, DOS_PRINTCHR
+    mov bx, cx
+
+    mov cx, 4
+PrintLoop:
+    rol bx, 4
+    mov dl, bl
+    and dl, 0fh
+    .IF dl > 9
+    add dl, 'a' - 10
+    .ELSE
+    or dl, '0'
+    .ENDIF
+    int 21h
+    loop PrintLoop
+    ret
+PrintUnsignedCX ENDP
+
+
+PrintCalibration MACRO
+    ; display joystick calibration values
+    mov ah, DOS_PRINTSTR
+
+    mov dx, offset MsgUpper
+    int 21h
+    mov cx, cs:[Range_100]
+    call PrintUnsignedCX
+    mov dx, offset Crlf_msg
+    int 21h
+
+    mov dx, offset MsgLower
+    int 21h
+    mov cx, cs:[Range_0]
+    call PrintUnsignedCX
+    mov dx, offset Crlf_msg
+    int 21h
+
+    mov dx, offset MsgRange
+    int 21h
+    mov cx, cs:[Range_100]
+    sub cx, cs:[Range_0]
+    call PrintUnsignedCX
+    mov dx, offset Crlf_msg
+    int 21h
+
+    mov dx, offset MsgBandWidthCoarse
+    int 21h
+    mov cx, cs:[BandWidthCoarse]
+    call PrintUnsignedCX
+    mov dx, offset Crlf_msg
+    int 21h
+
+    mov dx, offset MsgBandWidthFine
+    int 21h
+    mov cx, cs:[BandWidthFine]
+    call PrintUnsignedCX
+    mov dx, offset Crlf_msg
+    int 21h
+
+    .IF cs:[Range_Inverted]
+        mov dx, offset Inverted_msg
+        int 21h
+    .ENDIF
+ENDM
+
+PrintPosition MACRO ; clobbers some registers
+    push cx
+    push ax
+
+    mov cx, dx
+    call PrintUnsignedCX
+    mov dx, ax
+
+    mov ah, DOS_PRINTCHR
+    mov dl, ':'
+    int 21h
+
+    pop ax
+    push ax
+    xor cx, cx
+    mov cl, ah
+    call PrintUnsignedCX
+
+    mov ah, DOS_PRINTCHR
+    mov dl, ':'
+    int 21h
+
+    pop ax
+    xor cx, cx
+    mov cl, al
+    call PrintUnsignedCX
+
+    mov ah, DOS_PRINTCHR
+    mov dl, ':'
+    int 21h
+
+    pop cx
+    call PrintUnsignedCX
+    mov ah, DOS_PRINTSTR
+    mov dx, offset Crlf_msg
+    int 21h
+ENDM
+
+
+ENDIF
+
+
+Calibrate MACRO
+    ;mov cx, cs:[Range_100] ; optimized-out, see caller
+
+    .IF cx < cs:[Range_0] ; inverted, swap top and bottom
+        mov cs:[Range_Inverted], 1
+        xchg cx, cs:[Range_0]
+    .ENDIF
+    mov cs:[Range_100], cx
+
+    ; compute usable range
+    ;mov cx, cs:[Range_100]
+    sub cx, cs:[Range_0]
+
+    xor dx, dx
+    mov ax, cx
+    mov bx, BANDS
+    div bx
+    mov cs:[BandWidthCoarse], ax
+
+    xor dx, dx
+    mov bx, FINE_BANDS_PER_BAND
+    div bx
+    .IF ax == 0
+        inc ax ; fine shouldn't be 0
+    .ENDIF
+    mov cs:[BandWidthFine], ax
+ENDM
 
 
 Install PROC
@@ -187,20 +475,42 @@ Install PROC
     call JoystickWaitButton
     call JoystickReadPosition
 
-    mov ax, cs:[Range_0]
-    sub ax, cx
-    shr ax, 1 ; divide difference between top and bottom by four
-    shr ax, 1
-    add cx, ax
-    mov cs:[Range_75], cx
-    add cx, ax
-    mov cs:[Range_50], cx
-    add cx, ax
-    mov cs:[Range_25], cx
-    call ReadBand
+    ;mov cs:[Range_100], cx ; optimized out, see Calibrate()
 
-    ;mov cs:[LastPosition], cx
-    mov cs:[LastRange], al
+    Calibrate
+
+    call JoystickReadPosition
+    call ConvertPosition
+    mov cs:[LastRangeAbsolute], ah
+    mov cs:[LastRangeRelative], al
+    mov cs:[LastOffset], cx
+
+IF DEBUGMODE
+    PrintCalibration
+
+printloop:
+    call JoystickWaitNotButton
+    call JoystickWaitButton
+    push ax ; save button
+
+    call JoystickReadPosition
+    call JoystickReadPosition
+    call ConvertPosition
+
+    pusha
+    HandlePosition 0 ; called for side-effects only
+    popa
+    PrintPosition
+
+    pop ax ; restore button
+    test al, JOY_BUTTON_2
+    jz printloop
+
+    ; don't actually install, just test
+    ; exit to DOS
+    mov ax, 4c00h
+    int 21h
+ENDIF
 
     ; save old interrupt vector
     mov ax, 3508h ; 35 = get interrupt vector, vector = 08 (clock)
@@ -224,5 +534,9 @@ ResidentLen EQU 30h ; 30 paragraphs long (0x300h bytes?)
     mov ax, 3100h
     int 21h
 Install ENDP
+
+
+; Uninstall:
+;https://www.plantation-productions.com/Webster/www.artofasm.com/DOS/ch18/CH18-4.html
 
 END
