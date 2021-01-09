@@ -20,6 +20,18 @@ DOS_TSR       EQU 031h
 DOS_ALLOCMEM  EQU 048h
 DOS_FREEMEM   EQU 049h
 
+DOS_FILE_CREATE EQU 03ch
+DOS_FILE_OPEN   EQU 03dh
+DOS_FILE_CLOSE  EQU 03eh
+DOS_FILE_READ   EQU 03fh
+DOS_FILE_WRITE  EQU 040h
+
+
+FILE_MODE_READ      EQU 00h
+FILE_MODE_WRITE     EQU 01h
+FILE_MODE_READWRITE EQU 02h
+
+
 KEYBD_WRITE   EQU 05h
 
 DEBUGMODE EQU 0
@@ -45,8 +57,11 @@ BANDS equ 3
 FINE_BANDS_PER_BAND equ 10
 
 ; calibration info:
+Calibration_Persist:
 Range_0   WORD ?
 Range_100 WORD ?
+Calibration_Persist_End:
+
 Range_Inverted BYTE 0
 BandWidthCoarse WORD ?
 BandWidthFine WORD ?
@@ -299,8 +314,10 @@ ConvertPosition_ret:
 ConvertPosition ENDP
 
 
-;* Install
-;* This procedure marks the end of the TSR's resident section and the
+InstallSection:
+
+;* InstallSection
+;* This label marks the end of the TSR's resident section and the
 ;* beginning of the installation section.  When xwjoy terminates through
 ;* function 31h, the above code and data remain resident in memory.  The
 ;* memory occupied by the following code is returned to DOS.
@@ -314,6 +331,7 @@ MsgBandWidthCoarse db "Coarse Band: ", '$'
 MsgBandWidthFine db "Fine Band: ", '$'
 Inverted_msg db "(Inverted)", 0dh, 0ah, '$'
 MsgColon db ": ", '$'
+CalibrationFile db "xwjoy.cal", 0
 
 
 PrintUnsignedCX PROC USES ax bx cx dx
@@ -424,7 +442,7 @@ ENDM
 ENDIF
 
 
-Calibrate MACRO
+ComputeCalibration MACRO
     ;mov cx, cs:[Range_100] ; optimized-out, see caller
 
     .IF cx < cs:[Range_0] ; inverted, swap top and bottom
@@ -453,7 +471,7 @@ Calibrate MACRO
 ENDM
 
 
-Install PROC
+Calibrate PROC
     mov ah, DOS_PRINTSTR
     mov dx, offset Down_msg
     int 21h
@@ -475,10 +493,86 @@ Install PROC
     call JoystickWaitButton
     call JoystickReadPosition
 
-    ;mov cs:[Range_100], cx ; optimized out, see Calibrate()
+    mov cs:[Range_100], cx
 
-    Calibrate
+    ret
+Calibrate ENDP
 
+
+SaveCalibration PROC
+    LOCAL res:WORD
+
+    mov [res], -1 ; failure, by default
+
+    mov ah, DOS_FILE_CREATE
+    xor cx, cx ; attr_normal
+    lea dx, CalibrationFile
+    int 21h
+
+    .IF !carry? ; success
+        mov bx, ax ; bx = file handle
+        mov ah, DOS_FILE_WRITE
+        mov cx, Calibration_Persist_End - Calibration_Persist
+        lea dx, Calibration_Persist
+        int 21h
+
+        .IF !carry? && ax == (Calibration_Persist_End - Calibration_Persist) ; succeeded
+            mov [res], 0
+        .ENDIF
+
+        ; close file
+        mov ah, DOS_FILE_CLOSE
+        ; bx = file handle
+        int 21h
+    .ENDIF
+
+    mov ax, [res]
+    ret
+SaveCalibration ENDP
+
+
+LoadCalibration PROC
+    LOCAL res:WORD
+
+    mov [res], -1 ; failure, by default
+
+    mov ax, (DOS_FILE_OPEN SHL 8) OR FILE_MODE_READ
+    lea dx, CalibrationFile
+    int 21h
+
+    .IF !carry? ; success
+        mov bx, ax ; bx = file handle
+        mov ah, DOS_FILE_READ
+        mov cx, Calibration_Persist_End - Calibration_Persist
+        lea dx, Calibration_Persist
+        int 21h
+
+        .IF !carry? && ax == (Calibration_Persist_End - Calibration_Persist) ; succeeded
+            mov [res], 0
+        .ENDIF
+
+        ; close file
+        mov ah, DOS_FILE_CLOSE
+        ; bx = file handle
+        int 21h
+    .ENDIF
+
+    mov ax, [res]
+    ret
+LoadCalibration ENDP
+
+
+Install PROC
+
+    call LoadCalibration
+    .IF ax
+        call Calibrate
+        call SaveCalibration
+    .ENDIF
+
+    ComputeCalibration
+
+    ; read initial position
     call JoystickReadPosition
     call ConvertPosition
     mov cs:[LastRangeAbsolute], ah
