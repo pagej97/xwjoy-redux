@@ -324,6 +324,32 @@ ConvertPosition_ret:
 ConvertPosition ENDP
 
 
+;PSP_Seg dw ?
+;Uninstall PROC USES ax dx
+;    ; restore original interrupt vector
+;    push ds
+;    mov ds, cs:[OldISRSeg]
+;    mov dx, cs:[OldISR]
+;    LOADWORD ax, DOS_INTVECT_SET, 08h ; vector = 08
+;    int 21h ; DS:DX -> new interrupt handler
+;    pop ds
+
+;    push es
+;    mov es, PSP_Seg
+;    mov es, es:[2Ch] ; Get address of environment block.
+;    mov ah, DOS_FREEMEM
+;    int 21h
+
+;    mov es, PSP_Seg ; Now free the program's memory
+;    mov ah, DOS_FREEMEM
+;    int 21h
+;    pop es
+
+;    ret
+;Uninstall ENDP
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 InstallSection:
 
 ;* InstallSection
@@ -572,6 +598,7 @@ LoadCalibration ENDP
 
 
 Install PROC
+;    mov [PSP_Seg], cs ; for uninstall support
 
     call LoadCalibration
     .IF ax
