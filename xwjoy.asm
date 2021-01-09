@@ -215,6 +215,10 @@ IntHdlr_callprev:
     byte 2eh,0ffh,1eh
     word offset OldISR
 
+    ;.IF cs:[LastRangeAbsolute] == 2
+    ;    TryUninstall
+    ;.ENDIF
+
     iret
 IntHdlr ENDP
 
@@ -324,29 +328,62 @@ ConvertPosition_ret:
 ConvertPosition ENDP
 
 
-;PSP_Seg dw ?
-;Uninstall PROC USES ax dx
-;    ; restore original interrupt vector
-;    push ds
-;    mov ds, cs:[OldISRSeg]
-;    mov dx, cs:[OldISR]
-;    LOADWORD ax, DOS_INTVECT_SET, 08h ; vector = 08
-;    int 21h ; DS:DX -> new interrupt handler
-;    pop ds
+IncludeUninstallSupport MACRO
 
-;    push es
-;    mov es, PSP_Seg
-;    mov es, es:[2Ch] ; Get address of environment block.
-;    mov ah, DOS_FREEMEM
-;    int 21h
+Uninstall PROC USES ax dx
+    ; restore original interrupt vector
+    push ds
+    mov ds, cs:[OldISRSeg]
+    mov dx, cs:[OldISR]
+    LOADWORD ax, DOS_INTVECT_SET, 08h ; vector = 08
+    int 21h ; DS:DX -> new interrupt handler
+    pop ds
 
-;    mov es, PSP_Seg ; Now free the program's memory
-;    mov ah, DOS_FREEMEM
-;    int 21h
-;    pop es
+    push es
+    mov es, cs:[2Ch] ; Get address of environment block.
+    mov ah, DOS_FREEMEM
+    int 21h
 
-;    ret
-;Uninstall ENDP
+    push cs
+    pop es ; Now free the program's memory
+    mov ah, DOS_FREEMEM
+    int 21h
+    pop es
+
+    ret
+Uninstall ENDP
+
+
+CanUninstall PROC USES es bx cx
+    ; (returns ax = true, if can uninstall)
+
+    ; query current interrupt vector
+    LOADWORD ax, DOS_INTVECT_GET, 08h ; vector = 08 (clock)
+    int 21h ; ES:BX -> current interrupt handler
+
+    mov ax, es
+    mov cx, cs
+    .IF ax == cx && bx == IntHdlr
+        mov ax, 1
+    .ELSE
+        xor ax, ax
+    .ENDIF
+
+    ret
+CanUninstall ENDP
+
+ENDM
+
+TryUninstall MACRO ; interrupts should be disabled whenever we call this!
+    push ax
+    call CanUninstall
+    .IF ax
+        call Uninstall
+    .ENDIF
+    pop ax
+ENDM
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
@@ -598,8 +635,6 @@ LoadCalibration ENDP
 
 
 Install PROC
-;    mov [PSP_Seg], cs ; for uninstall support
-
     call LoadCalibration
     .IF ax
         call Calibrate
