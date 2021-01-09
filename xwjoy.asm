@@ -43,6 +43,7 @@ DEBUGMODE EQU 0
 Down_msg BYTE 'Move dial to down position, and press button.$'
 Up_msg BYTE 'Move dial to up position, and press button.$'
 Crlf_msg BYTE 0dh,0ah,'$'
+CalibrationFile db "xwjoy.cal", 0
 
 KeyDataTable:
 KeyData_0     BYTE 5ch,2bh ; '\' (0%)
@@ -331,7 +332,6 @@ MsgBandWidthCoarse db "Coarse Band: ", '$'
 MsgBandWidthFine db "Fine Band: ", '$'
 Inverted_msg db "(Inverted)", 0dh, 0ah, '$'
 MsgColon db ": ", '$'
-CalibrationFile db "xwjoy.cal", 0
 
 
 PrintUnsignedCX PROC USES ax bx cx dx
