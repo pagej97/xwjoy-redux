@@ -16,9 +16,10 @@ JOY_BUTTON_2  EQU 10h
 
 DOS_PRINTCHR  EQU 02h
 DOS_PRINTSTR  EQU 09h
-DOS_TSR       EQU 031h
-DOS_ALLOCMEM  EQU 048h
-DOS_FREEMEM   EQU 049h
+
+DOS_INTVECT_SET EQU 025h
+DOS_KEEPPRGM    EQU 031h
+DOS_INTVECT_GET EQU 035h
 
 DOS_FILE_CREATE EQU 03ch
 DOS_FILE_OPEN   EQU 03dh
@@ -26,10 +27,18 @@ DOS_FILE_CLOSE  EQU 03eh
 DOS_FILE_READ   EQU 03fh
 DOS_FILE_WRITE  EQU 040h
 
+DOS_ALLOCMEM  EQU 048h
+DOS_FREEMEM   EQU 049h
+
 
 FILE_MODE_READ      EQU 00h
 FILE_MODE_WRITE     EQU 01h
 FILE_MODE_READWRITE EQU 02h
+
+
+LOADWORD MACRO reg, hi, lo
+    mov reg, ( (hi SHL 8) OR lo )
+ENDM
 
 
 KEYBD_WRITE   EQU 05h
@@ -536,7 +545,7 @@ LoadCalibration PROC
 
     mov [res], -1 ; failure, by default
 
-    mov ax, (DOS_FILE_OPEN SHL 8) OR FILE_MODE_READ
+    LOADWORD ax, DOS_FILE_OPEN, FILE_MODE_READ
     lea dx, CalibrationFile
     int 21h
 
@@ -607,14 +616,14 @@ printloop:
 ENDIF
 
     ; save old interrupt vector
-    mov ax, 3508h ; 35 = get interrupt vector, vector = 08 (clock)
+    LOADWORD ax, DOS_INTVECT_GET, 08h ; vector = 08 (clock)
     int 21h ; ES:BX -> current interrupt handler
     mov cs:[OldISR], bx
     mov cs:[OldISRSeg], es
 
     ; set new interrupt vector
     mov dx, IntHdlr ; 01a3 = interrupt handler
-    mov ax, 2508h ; 25 = set interrupt vector, vector = 08
+    LOADWORD ax, DOS_INTVECT_SET, 08h ; vector = 08
     int 21h ; DS:DX -> new interrupt handler
 
 FreeAddr EQU 002ch
@@ -624,8 +633,10 @@ FreeAddr EQU 002ch
     int 21h
 
 ResidentLen EQU 30h ; 30 paragraphs long (0x300h bytes?)
-    mov dx, ResidentLen
-    mov ax, 3100h
+    mov dx, offset InstallSection
+    shr dx, 4
+    inc dx
+    LOADWORD ax, DOS_KEEPPRGM, 0 ; al:0 is return value
     int 21h
 Install ENDP
 
