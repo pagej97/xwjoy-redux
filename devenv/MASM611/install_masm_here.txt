@@ -1,0 +1,2 @@
+I build with a copy of MASM 6.11 installed into this directory.  ml.exe, nmake.exe would be in a "bin" subdirectory.
+
