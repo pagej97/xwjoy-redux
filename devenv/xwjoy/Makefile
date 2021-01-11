@@ -11,14 +11,5 @@ clean:
 .PHONY: clean
 
 $(TARGET): $(SOURCES)
-    masm /AT /Fl$(TARGET:.com=.lst) $?
-
-#.asm.obj:
-#    echo masm $<
-#    masm /AT /c $<
-
-#$(OBJS): $(SOURCES)
-
-#$(TARGET): $(OBJS)
-#    link $(OBJS),$(TARGET),$(TARGET:.com=.map),,,
+    ml /AT /Fl$(TARGET:.com=.lst) $?
 
