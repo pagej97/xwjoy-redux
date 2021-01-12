@@ -12,8 +12,12 @@ I assume that original utility is freeware.  Nobody gave me any permission to us
 - **Persistent calibration**: Throttle calibration data is stored on disk and loaded from there.  (The original *joy.com* required calibration every time it was executed.)
 
 ## Installing
+
 #### Overview
 Simply copy *xwjoy.com* to the disk and execute xwjoy.com (execute once and only once per boot cycle) before running *X-Wing* or *TIE Fighter*.  On the first run, it will prompt you to move the throttle to its limits and press a joystick button at each limit.
+
+#### Download
+<https://github.com/pagej97/xwjoy-redux/releases/download/v2.0/XWJOY.COM>
 
 #### Installing in DOSBox (GOG version, possibly similar on Steam?)
 1. Copy *xwjoy.com* to the game subdirectory.
