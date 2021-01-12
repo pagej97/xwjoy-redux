@@ -36,6 +36,9 @@ FILE_MODE_WRITE     EQU 01h
 FILE_MODE_READWRITE EQU 02h
 
 
+PSP_ENVBLOCK   EQU 02ch
+
+
 LOADWORD MACRO reg, hi, lo
     mov reg, ( (hi SHL 8) OR lo )
 ENDM
@@ -340,10 +343,6 @@ Uninstall PROC USES ax dx
     pop ds
 
     push es
-    mov es, cs:[2Ch] ; Get address of environment block.
-    mov ah, DOS_FREEMEM
-    int 21h
-
     push cs
     pop es ; Now free the program's memory
     mov ah, DOS_FREEMEM
@@ -515,7 +514,7 @@ ENDIF
 
 
 ComputeCalibration MACRO
-    ;mov cx, cs:[Range_100] ; optimized-out, see caller
+    mov cx, cs:[Range_100]
 
     .IF cx < cs:[Range_0] ; inverted, swap top and bottom
         mov cs:[Range_Inverted], 1
@@ -688,14 +687,11 @@ ENDIF
     LOADWORD ax, DOS_INTVECT_SET, 08h ; vector = 08
     int 21h ; DS:DX -> new interrupt handler
 
-FreeAddr EQU 002ch
-    mov ax, word ptr ds:[FreeAddr]
-    mov es, ax
+    mov es, cs:[PSP_ENVBLOCK] ; free program environment block.
     mov ah, DOS_FREEMEM
     int 21h
 
-ResidentLen EQU 30h ; 30 paragraphs long (0x300h bytes?)
-    mov dx, offset InstallSection
+    mov dx, offset InstallSection ; everything before InstallSection remains resident
     shr dx, 4
     inc dx
     LOADWORD ax, DOS_KEEPPRGM, 0 ; al:0 is return value
