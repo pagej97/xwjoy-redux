@@ -1,3 +1,6 @@
+<https://github.com/pagej97/xwjoy-redux/releases/download/v2.0/XWJOY.COM>
+
+
 # xwjoy-redux
 Throttle Support for DOS *X-Wing* / *TIE Fighter* games
 
