@@ -46,7 +46,9 @@ ENDM
 
 KEYBD_WRITE   EQU 05h
 
+IFNDEF DEBUGMODE
 DEBUGMODE EQU 0
+ENDIF
 
     jmp Install ; Jump over data and resident code
 
