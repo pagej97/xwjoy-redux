@@ -27,7 +27,7 @@ Simply copy *xwjoy.com* to the disk and execute xwjoy.com (execute once and only
   * Linux: */home/user/.local/share/STAR WARS Tie Fighter Special Edition/data*
   * Windows: *C:\GOG Games\Star Wars - TIE Fighter CD (1995)*
 2. In the GOG DOS CD-ROM version of *TIE Fighter*, there's a file *dosbox_tiecd_single.conf*.  Before the line `tie.exe`, add a new line `xwjoy.com`.
-3. If it doesn't work, you may need to set *swap34=true* in dosbox_tiecd.conf/dosbox_xwingcd.conf, as rudder axis may be read, instead of throttle.  Recalibrate after changing this setting.
+3. If it doesn't work, you may need to set *swap34=true* in *dosbox_tiecd.conf*/*dosbox_xwingcd.conf*, as rudder axis may be read, instead of throttle.  Recalibrate after changing this setting.
 
 #### Recalibrating
 Calibration data is stored on disk in a file called *xwjoy.cal*.  If you want to recalibrate your joystick, delete this file and run *xwjoy* again.  Be sure to reboot if you run *xwjoy* multiple times per boot cycle, before playing again.
